@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build/dist
+*.egg-info/
+dist/
+build/
+
+# Temp/test artifacts
+$env:TEMP/
+temp/
+*.tmp
+
+# Sensitive — never commit
+*.env
+*.key
+*.pem
+credentials.*
