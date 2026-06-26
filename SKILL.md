@@ -255,6 +255,7 @@ All modules are located in the same directory as this SKILL.md. Import paths ass
 | `deidentifier.py` | **PII脱敏引擎** — role-aware entity replacement, 11 entity types, local only, batch support |
 | `abstractor.py` | **结构化摘要生成器** — doc type detection, clause extraction, legal basis extraction, batch support |
 | `templates\document_templates.py` | Generate formatted .docx: 起诉状, 答辩状, 法律意见书, 律师函, 委托代理合同, 授权委托书 |
+| `rag_client.py` | **New** — Local RAG client for law knowledge base, fallback to statutes.py |
 | `statutes.py` | Search/lookup 民法典 (全7编), 公司法, 劳动合同法, 民事诉讼法, 刑法, 江浙沪地方法规 |
 | `ocr_helper.py` | OCR scanned PDFs/images with Chinese support, preprocessing, batch processing |
 | `bid_utils.py` | **New** — Bid requirement extraction, completeness check, package integrity, report generation |
@@ -436,7 +437,15 @@ generate_power_of_attorney(output,
 
 ## 3. Statute & Case Law Research
 
-Use `statutes.py` — covers 民法典 all 7 volumes, 公司法, 劳动合同法, 民事诉讼法, 刑法 (economic crimes).
+**Primary: `rag_client.py`** — queries a local law-knowledge-base RAG service at `http://localhost:8720`. Returns full statute text, not just summaries. When the RAG service is unavailable, automatically falls back to `statutes.py` keyword search.
+
+```python
+from rag_client import query
+result = query("劳动合同试用期最长多久", top=3)
+# Returns full statute text from RAG, or keyword summaries from statutes.py fallback
+```
+
+**Secondary: `statutes.py`** — covers 民法典 all 7 volumes, 公司法, 劳动合同法, 民事诉讼法, 刑法 (economic crimes). Used as fallback when RAG is offline.
 
 ### Search by keywords
 ```python

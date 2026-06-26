@@ -15,16 +15,20 @@ from PIL import Image
 def render_page_to_png(pdf_path, page_num, dpi=200):
     """Render a single PDF page to a PIL Image."""
     doc = fitz.open(pdf_path)
-    if page_num < 0:
-        page_num = len(doc) + page_num
-    page = doc[page_num]
-    pix = page.get_pixmap(dpi=dpi)
-    # Save to temp then reload (PyMuPDF pixmap -> PIL)
-    import io
-    img_data = pix.tobytes("png")
-    img = Image.open(io.BytesIO(img_data))
-    doc.close()
-    return img
+    try:
+        if page_num < 0:
+            page_num = len(doc) + page_num
+        # Clamp to valid range
+        if page_num < 0 or page_num >= len(doc):
+            raise IndexError(f'Page {page_num} out of range (0-{len(doc)-1})')
+        page = doc[page_num]
+        pix = page.get_pixmap(dpi=dpi)
+        import io
+        img_data = pix.tobytes("png")
+        img = Image.open(io.BytesIO(img_data))
+        return img
+    finally:
+        doc.close()
 
 
 def make_contract_collage(pdf_path, output_path=None, dpi=180, gap=10):
@@ -121,15 +125,17 @@ def render_brochure_pages(pdf_path, page_numbers, output_dir, prefix='brochure',
     os.makedirs(output_dir, exist_ok=True)
     results = []
     doc = fitz.open(pdf_path)
-    for pn in page_numbers:
-        if pn < len(doc):
-            out_path = os.path.join(output_dir, f'{prefix}_P{pn+1}.png')
-            page = doc[pn]
-            pix = page.get_pixmap(dpi=dpi)
-            pix.save(out_path)
-            results.append(out_path)
-            print(f"  Brochure P{pn+1} -> {out_path}", file=sys.stderr)
-    doc.close()
+    try:
+        for pn in page_numbers:
+            if 0 <= pn < len(doc):
+                out_path = os.path.join(output_dir, f'{prefix}_P{pn+1}.png')
+                page = doc[pn]
+                pix = page.get_pixmap(dpi=dpi)
+                pix.save(out_path)
+                results.append(out_path)
+                print(f"  Brochure P{pn+1} -> {out_path}", file=sys.stderr)
+    finally:
+        doc.close()
     return results
 
 
@@ -224,8 +230,13 @@ def merge_chapters(chapter_paths, output_path, keep_cover_only_first=True):
             if merged is None:
                 # First chapter: copy whole document as-is
                 merged = ch_doc
-                # Remove the trailing blank page break if present
-                merged.element.body.remove(merged.element.body[-1])
+                # First chapter: copy whole document as-is
+                # Remove trailing page break only if body is non-empty
+                if len(merged.element.body) > 0:
+                    last = merged.element.body[-1]
+                    br_tags = last.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br')
+                    if br_tags and br_tags[-1].get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type') == 'page':
+                        merged.element.body.remove(last)
             else:
                 # Subsequent chapters: skip cover page, copy rest
                 elements = list(ch_doc.element.body)
