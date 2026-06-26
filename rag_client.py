@@ -11,8 +11,11 @@ Usage:
 
 import urllib.request
 import urllib.error
+import urllib.parse
+import http.client
 import json
 import os
+import re
 import sys
 
 # Ensure skill directory is on sys.path for fallback import
@@ -42,17 +45,40 @@ def query(question, top=5, fmt="text"):
         req = urllib.request.Request(url, headers={'User-Agent': 'legal-docs/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = resp.read().decode('utf-8')
+            # Validate: reject empty or HTML error responses
+            if not data or not data.strip():
+                return _fallback_statutes(question, top)
+            if data.strip().startswith('<') or data.strip().startswith('<!'):
+                return _fallback_statutes(question, top)
             return data
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
-        # RAG service unavailable — fall back to statutes.py keyword search
+    except (urllib.error.URLError, urllib.error.HTTPError,
+            OSError, http.client.HTTPException) as e:
         return _fallback_statutes(question, top)
 
 
 def _fallback_statutes(question, top=5):
-    """Fallback: keyword-based search in statutes.py."""
+    """Fallback: keyword-based search in statutes.py.
+    Tokenizes natural-language questions into meaningful keywords."""
     try:
         from statutes import search_statutes
-        results = search_statutes([question], top_k=top)
+
+        # Tokenize: extract legal-relevant 2-4 char Chinese substrings
+        # Remove common question words to get meaningful search terms
+        stopwords = {'什么', '怎么', '多少', '如何', '哪个', '请问', '是否',
+                     '最长', '最短', '多久', '的', '了', '吗', '呢', '啊',
+                     '应该', '可以', '需要'}
+        tokens = []
+        for i in range(len(question)):
+            for length in (2, 3, 4):
+                if i + length <= len(question):
+                    token = question[i:i+length]
+                    if token not in stopwords and not all(c in '，。？！、：；""''（）' for c in token):
+                        tokens.append(token)
+
+        # Use longest unique tokens as keywords
+        keywords = list(dict.fromkeys(sorted(tokens, key=len, reverse=True)))[:8]
+        results = search_statutes(keywords, top_k=top)
+
         if not results:
             return None
         lines = ["[RAG 服务未启动，以下结果来自本地 statutes.py 关键词搜索]\n"]
@@ -70,8 +96,15 @@ def check_rag_status():
         url = f"{RAG_URL}?{params}"
         req = urllib.request.Request(url, headers={'User-Agent': 'legal-docs/1.0'})
         with urllib.request.urlopen(req, timeout=3) as resp:
+            data = resp.read().decode('utf-8')
+            # Validate: response must be non-empty and not an HTML error page
+            if not data or not data.strip():
+                return False, "RAG 服务返回空响应"
+            if data.strip().startswith('<'):
+                return False, "RAG 服务返回 HTML 错误页"
             return True, f"RAG 服务运行中 ({RAG_URL})"
-    except Exception as e:
+    except (urllib.error.URLError, urllib.error.HTTPError,
+            OSError, http.client.HTTPException) as e:
         return False, f"RAG 服务未启动: {e}"
 
 
