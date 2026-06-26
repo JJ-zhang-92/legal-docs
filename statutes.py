@@ -1033,6 +1033,37 @@ LOCAL_REGULATIONS = {
 }
 
 
+ALL_PROVINCES = {'北京', '天津', '上海', '重庆',
+    '河北', '山西', '辽宁', '吉林', '黑龙江',
+    '江苏', '浙江', '安徽', '福建', '江西', '山东',
+    '河南', '湖北', '湖南', '广东', '广西', '海南',
+    '四川', '贵州', '云南', '西藏',
+    '陕西', '甘肃', '青海', '宁夏', '新疆', '内蒙古'}
+
+COVERED_REGIONS = set(LOCAL_REGULATIONS.keys())  # {'浙江省', '江苏省', '上海市', '长三角区域协作'}
+
+
+def get_covered_regions():
+    """Return list of regions currently covered by local regulations."""
+    return list(LOCAL_REGULATIONS.keys())
+
+
+def detect_uncovered_regions(text):
+    """Scan text for provincial references not covered by the database.
+    Returns list of uncovered province names found in the text."""
+    found = set()
+    for province in ALL_PROVINCES:
+        if province in text and province not in COVERED_REGIONS:
+            found.add(province)
+    # Remove special regions that are covered
+    for r in COVERED_REGIONS:
+        base = r.replace('省', '').replace('市', '')
+        for p in list(found):
+            if base in p or p in base:
+                found.discard(p)
+    return sorted(found)
+
+
 # ==============================================================================
 # Search & Query API
 # ==============================================================================
@@ -1315,6 +1346,21 @@ def search_local_regulations(keywords, region=None):
         if key not in seen:
             seen.add(key)
             unique_results.append(r)
+
+    # If a specific region was requested but not covered, add a reminder
+    if region and region not in LOCAL_REGULATIONS:
+        short = region.replace('省', '').replace('市', '').replace('自治区', '')
+        found = detect_uncovered_regions(region)
+        if found:
+            unique_results.append({
+                'statute': '__REMINDER__',
+                'region': region,
+                'type': '系统提醒',
+                'article': '',
+                'summary': f'当前法规库仅覆盖江浙沪地区，不含"{region}"。如需添加{region}地方法规，请在 statutes.py 的 LOCAL_REGULATIONS 中添加相关法规条目。目前缺少的地区：{", ".join(found)}',
+                'match_kw': '',
+            })
+
     return unique_results
 
 
