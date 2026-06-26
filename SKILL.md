@@ -496,6 +496,41 @@ When the user's legal matter involves a location outside these regions:
 3. If the user provides the local regulation details, guide them to add entries to `LOCAL_REGULATIONS` in statutes.py, or offer to do it for them.
 4. `search_local_regulations()` already returns a `__REMINDER__` result when querying uncovered regions — check for this sentinel in results.
 
+### 地方性法规与全国性法律的适用原则
+
+当查询结果同时包含全国性法律和地方性法规时，AI 应按以下层级和原则排列引用：
+
+**效力层级（上位法优于下位法）：**
+```
+宪法 ＞ 法律（全国人大）＞ 行政法规（国务院）＞ 地方性法规（省/市人大）＞ 地方政府规章
+```
+
+**三个核心原则：**
+
+| 原则 | 规则 | 适用场景 |
+|------|------|----------|
+| 上位法优于下位法 | 全国性法律 ＞ 地方性法规 | 地方规定与法律抵触时，法律优先 |
+| 特别法优于一般法 | 同层级中特别规定 ＞ 一般规定 | 《劳动合同法》优先于《劳动法》 |
+| 新法优于旧法 | 同层级中新法 ＞ 旧法 | 2024公司法优先于2018公司法 |
+
+**AI 引用时应遵循的判断逻辑：**
+
+```
+同时检索到全国法 + 地方法规
+        ↓
+    全国法有规定吗？
+   ├── 有 → 地方法规是"细化"还是"抵触"？
+   │   ├── 细化（更严格/更具体，不矛盾）→ 地方法规优先，标注"地方标准"
+   │   └── 抵触（降低标准/正面矛盾）→ 全国法优先，标注"⚠ 地方法规可能无效"
+   └── 没有 → 地方法规合法填补空白 → 直接适用，标注"地方规定"
+```
+
+**引注格式：**
+- 全国法基准引用：[法律] > [地方法规]
+- 细化情形：`《劳动合同法》第47条，浙江省地方标准进一步规定...`
+- 抵触情形：`《民法典》第X条 ＞ ⚠ 某省条例第Y条（可能因抵触上位法而无效）`
+- 空白填补：`无全国统一规定，适用《浙江省XX条例》第X条`
+
 ### Statute coverage reference
 
 #### National statutes
